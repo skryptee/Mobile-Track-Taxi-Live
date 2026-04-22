@@ -54,7 +54,7 @@ export default function RegisterPage() {
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="w-full max-w-md space-y-8 p-6">
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-foreground">Taxi Dispatch</h1>
+          <h1 className="text-3xl font-bold text-foreground">Mobile Track Taxi</h1>
           <p className="text-muted-foreground mt-2">Create Admin Account</p>
         </div>
 

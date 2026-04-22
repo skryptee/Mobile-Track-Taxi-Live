@@ -33,7 +33,7 @@ interface CompanySettings {
 
 export default function SettingsPage() {
   const [companySettings, setCompanySettings] = useState<CompanySettings>({
-    companyName: 'Taxi Dispatch',
+    companyName: 'Mobile Track Taxi',
     email: 'admin@taxidispatch.com',
     phone: '+91-9629425357',
     address: '10/3i, Arunagirinathar Street, Kuttalam-609 801',
