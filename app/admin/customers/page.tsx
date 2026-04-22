@@ -5,6 +5,7 @@ import { AdminSidebar } from '@/components/AdminSidebar';
 import { AdminLayout } from '@/components/AdminLayout';
 import { Edit2, Trash2, Plus, Search } from 'lucide-react';
 import useSWR from 'swr';
+import Footer from '@/components/Footer';
 
 interface Customer {
   _id: string;
@@ -231,6 +232,9 @@ export default function CustomersPage() {
               </div>
             )}
           </div>
+        </div>
+        <div>
+        <Footer/>
         </div>
       </AdminLayout>
     </>

@@ -90,7 +90,6 @@ export function AdminSidebar() {
             <LogOut size={20} />
             <span>Logout</span>
           </button>
-        <a href=""><img src="../Skryptee.png" alt="Skryptee Logo"  /></a>
         </div>
         
       </aside>

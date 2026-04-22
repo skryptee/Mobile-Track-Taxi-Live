@@ -9,6 +9,7 @@ import {
   Send, TestTube
 } from 'lucide-react';
 import { openWhatsApp } from '@/lib/whatsapp';
+import Footer from '@/components/Footer';
 
 interface NotificationSettings {
   adminPhone: string;
@@ -421,6 +422,7 @@ Time: ${new Date().toLocaleString('en-IN')}`;
             )}
           </div>
         </div>
+        <Footer/>
       </AdminLayout>
     </>
   );

@@ -5,6 +5,7 @@ import { AdminSidebar } from '@/components/AdminSidebar';
 import { AdminLayout } from '@/components/AdminLayout';
 import { Edit2, Trash2, Plus } from 'lucide-react';
 import useSWR from 'swr';
+import Footer from '@/components/Footer';
 
 interface FareConfig {
   _id: string;
@@ -307,6 +308,7 @@ export default function FareConfigPage() {
             </div>
           </div>
         </div>
+        <Footer/>
       </AdminLayout>
     </>
   );

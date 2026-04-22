@@ -10,6 +10,8 @@ import {
 } from 'lucide-react';
 import useSWR from 'swr';
 
+import Footer from '@/components/Footer';
+
 interface Driver {
   _id: string;
   name: string;
@@ -446,6 +448,7 @@ export default function DriversPage() {
             )}
           </div>
         </div>
+        <Footer />
       </AdminLayout>
     </>
   );

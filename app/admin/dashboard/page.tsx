@@ -6,7 +6,7 @@ import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tool
 import { Users, UserCheck, Calendar, TrendingUp, MessageCircle, RefreshCw } from 'lucide-react';
 import useSWR from 'swr';
 import { openWhatsApp, generateBookingCreatedMessage } from '@/lib/whatsapp';
-
+import Footer from '@/components/Footer';
 interface Booking {
   _id: string;
   bookingId: string;
@@ -315,6 +315,7 @@ export default function DashboardPage() {
             </p>
           </div>
         </div>
+        <Footer/>
       </AdminLayout>
     </>
   );

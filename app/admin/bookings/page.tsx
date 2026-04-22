@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { AdminSidebar } from '@/components/AdminSidebar';
 import { AdminLayout } from '@/components/AdminLayout';
+import Footer from '@/components/Footer';
 import { 
   Edit2, Trash2, Plus, Search, MessageCircle, CheckCircle, PlayCircle, 
   Clock, UserPlus, X, Send, Ban, Star, MapPin, CreditCard, 
@@ -21,6 +22,7 @@ import {
   generateRatingRequestMessage,
   generateAdminNewBookingAlert,
   generateDriverNewTripMessage,
+  generateDriverStatusMessage,
   openWhatsApp,
   calculateFare,
 } from '@/lib/whatsapp';
@@ -89,7 +91,20 @@ interface FareConfig {
   minimumFare: number;
 }
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+const fetcher = async (url: string) => {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("API error");
+    const data = await res.json();
+
+    return Array.isArray(data) ? data : []; // ✅ force array
+  } catch (err) {
+    console.error("Fetcher error:", err);
+    return []; // ✅ prevent crash
+  }
+};
+
+
 
 // Generate 4-digit OTP
 const generateOTP = () => Math.floor(1000 + Math.random() * 9000).toString();
@@ -109,12 +124,18 @@ const calculateCancellationPenalty = (booking: Booking): number => {
 
 export default function BookingsPage() {
   const { data: bookings = [], isLoading, mutate } = useSWR<Booking[]>('/api/bookings', fetcher);
-  const { data: drivers = [] } = useSWR<Driver[]>('/api/drivers', fetcher);
+  const { data: drivers } = useSWR('/api/drivers', fetcher);
   const { data: customers = [] } = useSWR('/api/customers', fetcher);
   const { data: fareConfigs = [] } = useSWR<FareConfig[]>('/api/fare-config', fetcher);
   
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+
+const [pendingDriverMessage, setPendingDriverMessage] = useState<{
+  phone: string;
+  message: string;
+} | null>(null);
+
   const [showForm, setShowForm] = useState(false);
   
   // Debug: log when showForm changes
@@ -157,16 +178,20 @@ export default function BookingsPage() {
     if (savedPhone) setAdminPhone(savedPhone);
   }, []);
 
-  const filteredBookings = bookings.filter((booking) => {
-    const matchesSearch = 
-      booking.bookingId?.includes(searchTerm) ||
-      booking.customerId?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      booking.pickupLocation?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesStatus = statusFilter === 'all' || booking.status === statusFilter;
-    
-    return matchesSearch && matchesStatus;
-  });
+
+  const safeBookings = Array.isArray(bookings) ? bookings : [];
+
+const filteredBookings = safeBookings.filter((booking) => {
+  const matchesSearch =
+    booking.bookingId?.includes(searchTerm) ||
+    booking.customerId?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    booking.pickupLocation?.toLowerCase().includes(searchTerm.toLowerCase());
+
+  const matchesStatus =
+    statusFilter === 'all' || booking.status === statusFilter;
+
+  return matchesSearch && matchesStatus;
+});
 
   // Get applicable fare config
   const getApplicableFareConfig = (vehicleType: string, acType: string): FareConfig | undefined => {
@@ -320,49 +345,52 @@ export default function BookingsPage() {
     openWhatsApp(booking.customerId.phone, message);
   };
 
-  const sendDriverAssignedWhatsApp = (booking: Booking, notifyDriver = true) => {
-    if (!booking.customerId?.phone || !booking.driverId) return;
-    
-    const bookingInfo = {
-      bookingId: booking.bookingId,
-      pickupLocation: booking.pickupLocation,
-      dropoffLocation: booking.dropoffLocation,
-      vehicleType: booking.vehicleType,
-      acType: booking.acType,
-      fare: booking.estimatedFare,
-      distance: booking.estimatedDistance,
-      pickupTime: booking.pickupTime,
-    };
-    
-    const driverInfo = {
-      name: booking.driverId.name,
-      phone: booking.driverId.phone,
-      vehicleNumber: booking.driverId.vehicleNumber,
-      vehicleType: booking.driverId.vehicleType,
-      vehicleModel: booking.driverId.vehicleModel,
-      rating: booking.driverId.rating,
-    };
-    
-    // Send to customer
-    const customerMessage = generateDriverAssignedMessage(
-      bookingInfo,
-      { name: booking.customerId.name, phone: booking.customerId.phone },
-      driverInfo
-    );
-    openWhatsApp(booking.customerId.phone, customerMessage);
+  const sendDriverAssignedWhatsApp = (booking: Booking) => {
+  if (!booking.customerId?.phone || !booking.driverId) return;
 
-    // Send to driver
-    if (notifyDriver) {
-      setTimeout(() => {
-        const driverMessage = generateDriverNewTripMessage(
-          bookingInfo,
-          { name: booking.customerId.name, phone: booking.customerId.phone },
-          driverInfo
-        );
-        openWhatsApp(booking.driverId!.phone, driverMessage);
-      }, 1000);
-    }
+  const bookingInfo = {
+    bookingId: booking.bookingId,
+    pickupLocation: booking.pickupLocation,
+    dropoffLocation: booking.dropoffLocation,
+    vehicleType: booking.vehicleType,
+    acType: booking.acType,
+    fare: booking.estimatedFare,
+    distance: booking.estimatedDistance,
+    pickupTime: booking.pickupTime,
   };
+
+  const driverInfo = {
+    name: booking.driverId.name,
+    phone: booking.driverId.phone,
+    vehicleNumber: booking.driverId.vehicleNumber,
+    vehicleType: booking.driverId.vehicleType,
+    vehicleModel: booking.driverId.vehicleModel,
+    rating: booking.driverId.rating,
+  };
+
+  // ✅ 1. CUSTOMER MESSAGE
+  const customerMessage = generateDriverAssignedMessage(
+    bookingInfo,
+    { name: booking.customerId.name, phone: booking.customerId.phone },
+    driverInfo
+  );
+
+  openWhatsApp(booking.customerId.phone, customerMessage);
+
+  // ✅ 2. DRIVER MESSAGE (USER TRIGGERED → NOT BLOCKED)
+  setTimeout(() => {
+    const confirmSend = confirm("Send WhatsApp to Driver?");
+    if (confirmSend) {
+      const driverMessage = generateDriverNewTripMessage(
+        bookingInfo,
+        { name: booking.customerId.name, phone: booking.customerId.phone },
+        driverInfo
+      );
+
+      openWhatsApp(booking.driverId!.phone, driverMessage);
+    }
+  }, 300);
+};
 
   const sendDriverArrivedWhatsApp = (booking: Booking, otp: string) => {
     if (!booking.customerId?.phone || !booking.driverId) return;
@@ -506,6 +534,26 @@ export default function BookingsPage() {
       }
     }
   };
+    const sendDriverWhatsApp = (booking: Booking, status: string) => {
+  if (!booking.driverId) return;
+
+  const message = generateDriverStatusMessage(
+    booking,
+    {
+      name: booking.customerId.name,
+      phone: booking.customerId.phone,
+    },
+    {
+      name: booking.driverId.name,
+      phone: booking.driverId.phone,
+      vehicleNumber: booking.driverId.vehicleNumber,
+      vehicleType: booking.driverId.vehicleType,
+    },
+    status
+  );
+
+  openWhatsApp(booking.driverId.phone, message);
+};
 
 const handleStatusChange = async (
   id: string,
@@ -544,14 +592,20 @@ const handleStatusChange = async (
 
     await mutate();
 
+
+
     // ✅ WhatsApp triggers
     if (newStatus === "confirmed") {
-      sendBookingConfirmedWhatsApp(booking);
-    } else if (newStatus === "driver_arrived") {
-      sendDriverArrivedWhatsApp(booking, updateData.pickupOtp);
-    } else if (newStatus === "ongoing") {
-      sendTripStartedWhatsApp(booking);
-    }
+  sendBookingConfirmedWhatsApp(booking);
+
+} else if (newStatus === "driver_arrived") {
+  sendDriverArrivedWhatsApp(data, updateData.pickupOtp);
+  sendDriverWhatsApp(data, "Driver Arrived"); // ✅ FIXED
+
+} else if (newStatus === "ongoing") {
+  sendTripStartedWhatsApp(data);
+  sendDriverWhatsApp(data, "Trip Started"); // ✅ FIXED
+}
 
     return data;
 
@@ -579,6 +633,7 @@ const handleCompleteTrip = async () => {
   console.log("🔥 COMPLETE TRIP CLICKED");
 
   if (!selectedBooking) return;
+  
 
 const kms = Math.max(1, parseFloat(actualKms || "0"));
   if (kms <= 0) {
@@ -629,7 +684,8 @@ const kms = Math.max(1, parseFloat(actualKms || "0"));
 
     // ✅ WhatsApp
     sendTripCompletedWhatsApp(selectedBooking, kms, fareBreakdown);
-
+sendDriverWhatsApp(data, "Trip Completed");
+    
     // ✅ Reset UI
     setShowCompleteModal(false);
     setSelectedBooking(null);
@@ -647,33 +703,74 @@ const kms = Math.max(1, parseFloat(actualKms || "0"));
     setShowAssignModal(true);
   };
 
-  const handleAssignDriver = async () => {
-    if (!selectedBooking || !selectedDriverId) return;
+const handleAssignDriver = async () => {
+  if (!selectedBooking || !selectedDriverId) return;
 
-    try {
-      const response = await fetch(`/api/bookings/${selectedBooking._id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          driverId: selectedDriverId,
-          status: 'driver_assigned',
-          driverAssignedAt: new Date().toISOString(),
-        }),
-      });
+  const safeDrivers = Array.isArray(drivers) ? drivers : [];
+  const driver = safeDrivers.find(d => d._id === selectedDriverId);
+  if (!driver) return;
 
-      if (response.ok) {
-        const updatedBooking = await response.json();
-        // Send driver assigned WhatsApp to both customer and driver
-        sendDriverAssignedWhatsApp(updatedBooking, true);
-        setShowAssignModal(false);
-        setSelectedBooking(null);
-        setSelectedDriverId('');
-        mutate();
-      }
-    } catch (error) {
-      console.error('Error:', error);
-    }
+  const booking = selectedBooking;
+
+  const bookingInfo = {
+    bookingId: booking.bookingId,
+    pickupLocation: booking.pickupLocation,
+    dropoffLocation: booking.dropoffLocation,
+    vehicleType: booking.vehicleType,
+    acType: booking.acType,
+    fare: booking.estimatedFare,
+    distance: booking.estimatedDistance,
+    pickupTime: booking.pickupTime,
   };
+
+  const driverInfo = {
+    name: driver.name,
+    phone: driver.phone,
+    vehicleNumber: driver.vehicleNumber,
+    vehicleType: driver.vehicleType,
+  };
+
+  // ✅ Customer WhatsApp
+  const customerMessage = generateDriverAssignedMessage(
+    bookingInfo,
+    { name: booking.customerId.name, phone: booking.customerId.phone },
+    driverInfo
+  );
+
+  openWhatsApp(booking.customerId.phone, customerMessage);
+
+  // ✅ Driver message (next action button)
+  setPendingDriverMessage({
+    phone: driver.phone,
+    message: generateDriverNewTripMessage(
+      bookingInfo,
+      { name: booking.customerId.name, phone: booking.customerId.phone },
+      driverInfo
+    ),
+  });
+
+  // ✅ API update
+  try {
+    const response = await fetch(`/api/bookings/${booking._id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        driverId: selectedDriverId,
+        status: 'driver_assigned',
+        driverAssignedAt: new Date().toISOString(),
+      }),
+    });
+
+    if (response.ok) {
+      mutate();
+      setShowAssignModal(false);
+      setSelectedBooking(null);
+      setSelectedDriverId('');
+    }
+  } catch (error) {
+    console.error(error);
+  }
+};
 
   const openCancelModal = (booking: Booking) => {
     setSelectedBooking(booking);
@@ -783,8 +880,11 @@ const kms = Math.max(1, parseFloat(actualKms || "0"));
   const farePreview = getFarePreview();
 
   // Available drivers only
-  const availableDrivers = drivers.filter((d) => d.status === 'available' || d.status === 'offline');
+ const safeDrivers = Array.isArray(drivers) ? drivers : [];
 
+const availableDrivers = safeDrivers.filter(
+  (d) => d.status === 'available' || d.status === 'offline'
+);
   // Status badge colors
   const getStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
@@ -1581,6 +1681,19 @@ const kms = Math.max(1, parseFloat(actualKms || "0"));
             </div>
           </div>
         )}
+      
+{pendingDriverMessage && (
+  <button
+    onClick={() => {
+      openWhatsApp(pendingDriverMessage.phone, pendingDriverMessage.message);
+      setPendingDriverMessage(null);
+    }}
+    className="fixed bottom-6 right-6 bg-green-600 text-white px-4 py-3 rounded-lg shadow-lg z-50"
+  >
+    📲 Send to Driver
+  </button>
+)}
+<Footer/>
       </AdminLayout>
     </>
   );

@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import useSWR from 'swr';
 import { Invoice } from '@/components/Invoice';
-
+import Footer from '@/components/Footer';
 interface Booking {
   _id: string;
   bookingId: string;
@@ -485,6 +485,7 @@ export default function ReportsPage() {
             </div>
           </div>
         )}
+        <Footer/>
       </AdminLayout>
     </>
   );
