@@ -1,5 +1,5 @@
 import Image from 'next/image';
-import LOGO from '@/lib/skryptee logo.png';
+import LOGO from '@/lib/skryptee.png';
 
 export default function Footer() {
   const year = new Date().getFullYear();
